@@ -15,13 +15,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
 
-      - name: Proton Clang Derleyicisini İndir
+      - name: Resmi AOSP Clang Derleyicisini Kur
         run: |
           mkdir -p clang
           cd clang
-          curl -LOs https://github.com
-          tar -xzf master.tar.gz --strip-components=1
-          rm master.tar.gz
+          # Android 16 uyumlu kararlı AOSP Clang derleyicisini çekiyoruz
+          curl -LOs https://googlesource.com
+          tar -xzf clang-r522817.tar.gz
+          rm clang-r522817.tar.gz
           echo "$(pwd)/bin" >> $GITHUB_PATH
 
       - name: Dogrudan LineageOS 23.2 Resmi Cekirdek Kaynagini Cek
