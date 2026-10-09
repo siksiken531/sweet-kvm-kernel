@@ -1,0 +1,75 @@
+name: Build KVM Kernel for Redmi Note 10 Pro (LineageOS 23.2 Source)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Depolama Alanını Temizle ve Güncelle
+        uses: actions/checkout@v4
+
+      - name: Gerekli Derleme Paketlerini Kur
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+
+      - name: Proton Clang Derleyicisini İndir
+        run: |
+          mkdir -p clang
+          cd clang
+          curl -LOs https://github.com
+          tar -xzf master.tar.gz --strip-components=1
+          rm master.tar.gz
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Dogrudan LineageOS 23.2 Resmi Cekirdek Kaynagini Cek
+        run: |
+          git clone https://github.com -b lineage-23.2 kernel
+
+      - name: KVM ve Sanallastırma Bayraklarini Enjekte Et
+        run: |
+          cd kernel
+          CONF_FILE="arch/arm64/configs/vendor/sweet_user_defconfig"
+          if [ ! -f "$CONF_FILE" ]; then CONF_FILE="arch/arm64/configs/sweet_defconfig"; fi
+          
+          echo "KVM yapilandirmalari defconfig dosyasina yaziliyor..."
+          echo "CONFIG_KVM=y" >> $CONF_FILE
+          echo "CONFIG_VIRTUALIZATION=y" >> $CONF_FILE
+          echo "CONFIG_KVM_ARM_HOST=y" >> $CONF_FILE
+          echo "CONFIG_TUN=y" >> $CONF_FILE
+          echo "CONFIG_BRIDGE=y" >> $CONF_FILE
+
+      - name: Kernel Derleme Islemini Baslat
+        run: |
+          cd kernel
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          
+          make O=out vendor/sweet_user_defconfig || make O=out sweet_defconfig
+          make -j$(nproc --all) O=out CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+
+      - name: AnyKernel3 ile LineageOS 23.2 Uyumlu Flashable Zip Olustur
+        run: |
+          git clone https://github.com anykernel
+          cd anykernel
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+          
+          if [ -f ../kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp ../kernel/out/arch/arm64/boot/Image.gz-dtb ./Image.gz-dtb
+          elif [ -f ../kernel/out/arch/arm64/boot/Image ]; then
+            cp ../kernel/out/arch/arm64/boot/Image ./Image
+          fi
+          
+          zip -r9 ../Sweet-Lineage23.2-KVM-Kernel.zip * -x .git* README.md
+
+      - name: KVM Kernel Zip Paketini Yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: LineageOS-23.2-KVM-Kernel
+          path: Sweet-Lineage23.2-KVM-Kernel.zip
