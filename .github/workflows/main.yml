@@ -10,38 +10,21 @@ jobs:
       - name: Depolama Alanını Temizle ve Güncelle
         uses: actions/checkout@v4
 
-      - name: Temel Derleme Paketlerini Kur
+      - name: Gerekli Derleme Paketlerini Kur
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+          sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
 
-      - name: Google Resmi AOSP Clang ve GCC Derleyicilerini Kur
+      - name: Kararli Clang Araç Zincirini Güvenli Şekilde Kur
         run: |
           mkdir -p ${{ github.workspace }}/toolchains
           cd ${{ github.workspace }}/toolchains
           
-          # AOSP Clang Derleyicisini İndir
-          mkdir -p clang
-          curl -LOs https://googlesource.com
-          tar -xzf clang-r522817.tar.gz -C clang
-          rm clang-r522817.tar.gz
+          # Hata veren curl yerine git clone kullanarak en güncel hafif Clang araç zincirini çekiyoruz
+          git clone https://github.com --depth=1 tools
           
-          # AOSP GCC 64-bit (aarch64) Çapraz Derleyicisini İndir
-          mkdir -p gcc64
-          curl -LOs https://googlesource.com
-          tar -xzf main.tar.gz -C gcc64
-          rm main.tar.gz
-          
-          # AOSP GCC 32-bit (arm) Çapraz Derleyicisini İndir
-          mkdir -p gcc32
-          curl -LOs https://googlesource.com
-          tar -xzf main.tar.gz -C gcc32
-          rm main.tar.gz
-          
-          # Yolları PATH değişkenine güvenli bir şekilde ekle
-          echo "${{ github.workspace }}/toolchains/clang/bin" >> $GITHUB_PATH
-          echo "${{ github.workspace }}/toolchains/gcc64/bin" >> $GITHUB_PATH
-          echo "${{ github.workspace }}/toolchains/gcc32/bin" >> $GITHUB_PATH
+          # Sistem yoluna ekleme yapıyoruz
+          echo "${{ github.workspace }}/toolchains/tools/bin" >> $GITHUB_PATH
 
       - name: Dogrudan LineageOS 23.2 Resmi Cekirdek Kaynagini Cek
         run: |
@@ -66,19 +49,15 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # İndirdiğimiz AOSP derleyicilerinin tam yollarını tanımlıyoruz
-          export CROSS_COMPILE=${{ github.workspace }}/toolchains/gcc64/bin/aarch64-linux-android-
-          export CROSS_COMPILE_ARM32=${{ github.workspace }}/toolchains/gcc32/bin/arm-linux-androideabi-
-          
-          # Yapılandırmayı oluştur
+          # Sadece LLVM/Clang kullanarak saf entegre derleme başlatıyoruz
           make O=out vendor/sweet_user_defconfig || make O=out sweet_defconfig
           
-          # Derlemeyi başlat
+          # Derleme komutunu çalıştır
           make -j$(nproc --all) O=out \
-            CC=${{ github.workspace }}/toolchains/clang/bin/clang \
+            CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=$CROSS_COMPILE \
-            CROSS_COMPILE_ARM32=$CROSS_COMPILE_ARM32
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
       - name: AnyKernel3 ile LineageOS 23.2 Uyumlu Flashable Zip Olustur
         run: |
