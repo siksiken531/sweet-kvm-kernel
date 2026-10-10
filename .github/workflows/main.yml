@@ -1,80 +1,60 @@
-name: Build KVM Kernel for Redmi Note 10 Pro (LineageOS 23.2 Source)
+name: Build KVM Kernel for Redmi Note 10 Pro (sweet)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Depolama Alanını Temizle ve Güncelle
+      - name: Checkout Kernel Source
         uses: actions/checkout@v4
+        with:
+          repository: LineageOS/android_kernel_xiaomi_sm6150
+          ref: lineage-23.2
+          path: kernel
 
-      - name: Gerekli Derleme Paketlerini Kur
+      - name: Checkout AnyKernel3
+        uses: actions/checkout@v4
+        with:
+          repository: osm0sis/AnyKernel3
+          ref: master
+          path: AnyKernel3
+
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses-dev libelf-dev clang lld llvm crossbuild-essential-arm64 zip
 
-      - name: Kararli Clang Araç Zincirini Güvenli Şekilde Kur
+      - name: Configure and Build Kernel
+        working-directory: ./kernel
         run: |
-          mkdir -p ${{ github.workspace }}/toolchains
-          cd ${{ github.workspace }}/toolchains
-          
-          # Hata veren curl yerine git clone kullanarak en güncel hafif Clang araç zincirini çekiyoruz
-          git clone https://github.com --depth=1 tools
-          
-          # Sistem yoluna ekleme yapıyoruz
-          echo "${{ github.workspace }}/toolchains/tools/bin" >> $GITHUB_PATH
-
-      - name: Dogrudan LineageOS 23.2 Resmi Cekirdek Kaynagini Cek
-        run: |
-          git clone https://github.com -b lineage-23.2 kernel
-
-      - name: KVM ve Sanallastırma Bayraklarini Enjekte Et
-        run: |
-          cd kernel
-          CONF_FILE="arch/arm64/configs/vendor/sweet_user_defconfig"
-          if [ ! -f "$CONF_FILE" ]; then CONF_FILE="arch/arm64/configs/sweet_defconfig"; fi
-          
-          echo "KVM yapilandirmalari defconfig dosyasina yaziliyor..."
-          echo "CONFIG_KVM=y" >> $CONF_FILE
-          echo "CONFIG_VIRTUALIZATION=y" >> $CONF_FILE
-          echo "CONFIG_KVM_ARM_HOST=y" >> $CONF_FILE
-          echo "CONFIG_TUN=y" >> $CONF_FILE
-          echo "CONFIG_BRIDGE=y" >> $CONF_FILE
-
-      - name: Kernel Derleme Islemini Baslat
-        run: |
-          cd kernel
           export ARCH=arm64
           export SUBARCH=arm64
-          
-          # Sadece LLVM/Clang kullanarak saf entegre derleme başlatıyoruz
-          make O=out vendor/sweet_user_defconfig || make O=out sweet_defconfig
-          
-          # Derleme komutunu çalıştır
-          make -j$(nproc --all) O=out \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export LLVM=1
+          export CC=clang
+          export CROSS_COMPILE=aarch64-linux-gnu-
 
-      - name: AnyKernel3 ile LineageOS 23.2 Uyumlu Flashable Zip Olustur
+          make LLVM=1 vendor/sm6150-perf_defconfig
+          ARCH=arm64 ./scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/vendor/sweet.config
+
+          scripts/config --enable CONFIG_VIRTUALIZATION
+          scripts/config --enable CONFIG_KVM
+          scripts/config --enable CONFIG_KVM_ARM_HOST
+
+          make LLVM=1 olddefconfig
+          make LLVM=1 -j$(nproc)
+
+      - name: Package with AnyKernel3
         run: |
-          git clone https://github.com anykernel
-          cd anykernel
-          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
-          
-          if [ -f ../kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
-            cp ../kernel/out/arch/arm64/boot/Image.gz-dtb ./Image.gz-dtb
-          elif [ -f ../kernel/out/arch/arm64/boot/Image ]; then
-            cp ../kernel/out/arch/arm64/boot/Image ./Image
-          fi
-          
-          zip -r9 ../Sweet-Lineage23.2-KVM-Kernel.zip * -x .git* README.md
+          cp kernel/arch/arm64/boot/Image AnyKernel3/
+          # Eğer dtb/dtbo gerekiyorsa kopyalama satırları eklenebilir
+          cd AnyKernel3
+          zip -r9 ../KVM-Kernel-Sweet-Flashable.zip *
 
-      - name: KVM Kernel Zip Paketini Yukle
+      - name: Upload Flashable Zip
         uses: actions/upload-artifact@v4
         with:
-          name: LineageOS-23.2-KVM-Kernel
-          path: Sweet-Lineage23.2-KVM-Kernel.zip
+          name: KVM-Kernel-Sweet-Flashable
+          path: KVM-Kernel-Sweet-Flashable.zip
+          
