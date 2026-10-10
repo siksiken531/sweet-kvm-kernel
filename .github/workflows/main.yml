@@ -35,14 +35,22 @@ jobs:
           export CC=clang
           export CROSS_COMPILE=aarch64-linux-gnu-
 
-          CONFIG_FILE=$(find arch/arm64/configs/ -type f \( -name "*sweet*" -o -name "*sm6150*" \) | head -n 1 | sed 's|arch/arm64/configs/||')
-          echo "Bulunan Config: $CONFIG_FILE"
-          make LLVM=1 $CONFIG_FILE
+          # 1. Taban defconfig dosyasını yükle
+          BASE_CONFIG=$(find arch/arm64/configs/vendor/ -name "*sm6150*" | head -n 1 | sed 's|arch/arm64/configs/||')
+          echo "Taban Config: $BASE_CONFIG"
+          make LLVM=1 $BASE_CONFIG
 
+          # 2. sweet.config parçasını taban yapılandırmayla birleştir
+          if [ -f "arch/arm64/configs/vendor/sweet.config" ]; then
+            ARCH=arm64 ./scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/vendor/sweet.config
+          fi
+
+          # 3. KVM sanallaştırma bayraklarını aç
           scripts/config --enable CONFIG_VIRTUALIZATION
           scripts/config --enable CONFIG_KVM
           scripts/config --enable CONFIG_KVM_ARM_HOST
 
+          # 4. Eksik ayarları varsayılanla tamamla ve derle
           make LLVM=1 olddefconfig
           make LLVM=1 -j$(nproc)
 
