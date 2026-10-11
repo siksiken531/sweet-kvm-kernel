@@ -1,21 +1,15 @@
-name: Kernel Build SSH
+name: SSH
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
+  ssh:
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Update
-        run: |
-          sudo apt update
-          sudo apt install -y git bc bison flex curl zip unzip
-
       - name: SSH Session
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true
-          detached: false
-          
+        timeout-minutes: 360
