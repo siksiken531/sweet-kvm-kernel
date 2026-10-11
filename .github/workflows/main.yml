@@ -1,68 +1,21 @@
-name: Build KVM Kernel for Redmi Note 10 Pro (sweet)
+name: Kernel Build SSH
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     steps:
-      - name: Checkout Kernel Source
-        uses: actions/checkout@v4
-        with:
-          repository: LineageOS/android_kernel_xiaomi_sm6150
-          ref: lineage-23.2
-          path: kernel
-
-      - name: Checkout AnyKernel3
-        uses: actions/checkout@v4
-        with:
-          repository: osm0sis/AnyKernel3
-          ref: master
-          path: AnyKernel3
-
-      - name: Install Dependencies
+      - name: Update
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses-dev libelf-dev clang lld llvm crossbuild-essential-arm64 zip
+          sudo apt update
+          sudo apt install -y git bc bison flex curl zip unzip
 
-      - name: Configure and Build Kernel
-        working-directory: ./kernel
-        run: |
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export LLVM=1
-          export CC=clang
-          export CROSS_COMPILE=aarch64-linux-gnu-
-
-          # 1. Taban defconfig dosyasını yükle
-          BASE_CONFIG=$(find arch/arm64/configs/vendor/ -name "*sm6150*" | head -n 1 | sed 's|arch/arm64/configs/||')
-          echo "Taban Config: $BASE_CONFIG"
-          make LLVM=1 $BASE_CONFIG
-
-          # 2. sweet.config parçasını taban yapılandırmayla birleştir
-          if [ -f "arch/arm64/configs/vendor/sweet.config" ]; then
-            ARCH=arm64 ./scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/vendor/sweet.config
-          fi
-
-          # 3. KVM sanallaştırma bayraklarını aç
-          scripts/config --enable CONFIG_VIRTUALIZATION
-          scripts/config --enable CONFIG_KVM
-          scripts/config --enable CONFIG_KVM_ARM_HOST
-
-          # 4. Eksik ayarları varsayılanla tamamla ve derle
-          make LLVM=1 olddefconfig
-          make LLVM=1 -j$(nproc)
-
-      - name: Package with AnyKernel3
-        run: |
-          cp kernel/arch/arm64/boot/Image AnyKernel3/
-          cd AnyKernel3
-          zip -r9 ../KVM-Kernel-Sweet-Flashable.zip *
-
-      - name: Upload Flashable Zip
-        uses: actions/upload-artifact@v4
+      - name: SSH Session
+        uses: mxschmitt/action-tmate@v3
         with:
-          name: KVM-Kernel-Sweet-Flashable
-          path: KVM-Kernel-Sweet-Flashable.zip
+          limit-access-to-actor: true
+          detached: false
           
