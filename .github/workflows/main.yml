@@ -11,27 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH Access
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PUBKEY }}" >> ~/.ssh/authorized_keys
-          chmod 700 ~/.ssh
-          chmod 600 ~/.ssh/authorized_keys
-
-      - name: Install SSH Server
-        run: |
-          sudo apt update
-          sudo apt install -y openssh-server
-          sudo systemctl start ssh
-          sudo systemctl status ssh
-
-      - name: Show Connection Info
-        run: |
-          echo "USER=$(whoami)"
-          hostname -I
-          curl -4 ifconfig.me || true
-
-      - name: Keep Alive
-        run: |
-          sleep 21600
-          
+      - name: Start tmate
+        uses: mxschmitt/action-tmate@v3
+        
